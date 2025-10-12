@@ -1,11 +1,10 @@
-from django.urls import path
-from . import auth_views
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+from . import views
+
+router = DefaultRouter()
+router.register(r'auth', views.AuthViewSet, basename='auth')
 
 urlpatterns = [
-    path('auth/register/', auth_views.register, name='register'),
-    path('auth/login/', auth_views.login, name='login'),
-    path('auth/refresh/', auth_views.refresh_token, name='refresh'),
-    path('auth/verify-email/', auth_views.verify_email, name='verify-email'),
-    path('auth/profile/', auth_views.profile, name='profile'),
-    path('auth/logout/', auth_views.logout, name='logout'),
+    path('', include(router.urls)),
 ]
