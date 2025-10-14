@@ -163,3 +163,87 @@ class CarViewSet(viewsets.ModelViewSet):
             )
 
         return queryset
+
+
+from rest_framework import viewsets, status
+from rest_framework.permissions import IsAdminUser
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from drf_yasg.utils import swagger_auto_schema
+from drf_yasg import openapi
+from django.db.models import Q
+from .models import Car
+from .serializers import CarSerializer
+
+# Существующий CarViewSet остается без изменений
+
+class AdminCarViewSet(viewsets.ModelViewSet):
+    queryset = Car.objects.all()
+    serializer_class = CarSerializer
+    permission_classes = [IsAdminUser]
+
+    @swagger_auto_schema(
+        operation_summary="Admin List Cars",
+        operation_description="List cars with admin filters/search",
+        manual_parameters=[
+            openapi.Parameter('search', openapi.IN_QUERY, description="Search by brand/model", type=openapi.TYPE_STRING),
+            openapi.Parameter('is_active', openapi.IN_QUERY, description="Filter by status", type=openapi.TYPE_BOOLEAN),
+            openapi.Parameter('min_price', openapi.IN_QUERY, description="Min price", type=openapi.TYPE_NUMBER),
+            openapi.Parameter('max_price', openapi.IN_QUERY, description="Max price", type=openapi.TYPE_NUMBER),
+        ],
+        tags=['Admin Cars']
+    )
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        search = request.query_params.get('search')
+        if search:
+            queryset = queryset.filter(Q(brand__icontains=search) | Q(model__icontains=search))
+        is_active = request.query_params.get('is_active')
+        if is_active is not None:
+            queryset = queryset.filter(is_active=bool(is_active))
+        min_price = request.query_params.get('min_price')
+        if min_price:
+            queryset = queryset.filter(price__gte=min_price)
+        max_price = request.query_params.get('max_price')
+        if max_price:
+            queryset = queryset.filter(price__lte=max_price)
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
+    @swagger_auto_schema(
+        operation_summary="Admin Create Car",
+        operation_description="Create car (admin only)",
+        request_body=CarSerializer,
+        tags=['Admin Cars']
+    )
+    def create(self, request, *args, **kwargs):
+        return super().create(request, *args, **kwargs)
+
+    @swagger_auto_schema(
+        operation_summary="Admin Update Car",
+        operation_description="Update car (admin only)",
+        request_body=CarSerializer,
+        tags=['Admin Cars']
+    )
+    def update(self, request, *args, **kwargs):
+        return super().update(request, *args, **kwargs)
+
+    @swagger_auto_schema(
+        operation_summary="Admin Delete Car",
+        operation_description="Delete car (admin only)",
+        tags=['Admin Cars']
+    )
+    def destroy(self, request, *args, **kwargs):
+        return super().destroy(request, *args, **kwargs)
+
+    @swagger_auto_schema(
+        operation_summary="Admin Toggle Status",
+        operation_description="Toggle car status (admin only)",
+        tags=['Admin Cars']
+    )
+    @action(detail=True, methods=['patch'], permission_classes=[IsAdminUser])
+    def toggle_status(self, request, pk=None):
+        car = self.get_object()
+        car.is_active = not car.is_active
+        car.save()
+        return Response({'message': 'Статус изменён', 'is_active': car.is_active})

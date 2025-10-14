@@ -55,22 +55,22 @@ WSGI_APPLICATION = 'core.wsgi.application'
 
 AUTH_USER_MODEL = 'api.User'
 
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.postgresql',
-#         'NAME': 'drivecar_db',
-#         'USER': 'raha',
-#         'PASSWORD': 'password',
-#         'HOST': 'localhost',
-#         'PORT': '5432',
-#     }
-# }
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',  # Движок SQLite
-        'NAME': BASE_DIR / 'db.sqlite3',        # Файл базы данных в корне проекта
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'drivecar_db',
+        'USER': 'raha',
+        'PASSWORD': 'password',
+        'HOST': 'localhost',
+        'PORT': '5432',
     }
 }
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.sqlite3',  # Движок SQLite
+#         'NAME': BASE_DIR / 'db.sqlite3',        # Файл базы данных в корне проекта
+#     }
+# }
 
 
 SIMPLE_JWT = {
@@ -118,3 +118,8 @@ SWAGGER_SETTINGS = {
     },
     'USE_SESSION_AUTH': False,
 }
+
+AUTHENTICATION_BACKENDS = [
+    'api.backends.EmailBackend',  # сначала наш backend
+    'django.contrib.auth.backends.ModelBackend',  # потом стандартный
+]
