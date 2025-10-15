@@ -4,15 +4,6 @@ from datetime import timedelta
 
 import dj_database_url
 
-# Load .env file from Render secrets
-env_path = '/etc/secrets/.env'
-if os.path.exists(env_path):
-    with open(env_path) as f:
-        for line in f:
-            if '=' in line and not line.startswith('#'):
-                key, value = line.strip().split('=', 1)
-                os.environ[key] = value
-
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-rboj#b9769wj#+-kmeq(i7+6vn*3a0cf8e6993dvvnna@8g#ow')
