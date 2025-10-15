@@ -4,6 +4,15 @@ from datetime import timedelta
 
 import dj_database_url
 
+# Load .env file from Render secrets
+env_path = '/etc/secrets/.env'
+if os.path.exists(env_path):
+    with open(env_path) as f:
+        for line in f:
+            if '=' in line and not line.startswith('#'):
+                key, value = line.strip().split('=', 1)
+                os.environ[key] = value
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-rboj#b9769wj#+-kmeq(i7+6vn*3a0cf8e6993dvvnna@8g#ow')
@@ -35,8 +44,6 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = 'core.urls'
-WSGI_APPLICATION = 'core.wsgi.application'
-AUTH_USER_MODEL = 'api.User'
 
 TEMPLATES = [
     {
@@ -54,7 +61,9 @@ TEMPLATES = [
     },
 ]
 
-# PostgreSQL Database - ТОЛЬКО ДЛЯ RENDER
+WSGI_APPLICATION = 'core.wsgi.application'
+
+# Database
 DATABASES = {
     'default': dj_database_url.config(
         default=os.environ.get('DATABASE_URL'),
@@ -62,16 +71,19 @@ DATABASES = {
     )
 }
 
-SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(days=1),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
-}
-
 AUTH_PASSWORD_VALIDATORS = [
-    {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
-    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
-    {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
-    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
+    {
+        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+    },
 ]
 
 LANGUAGE_CODE = 'en-us'
@@ -82,16 +94,10 @@ USE_TZ = True
 STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# Email Settings
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
-EMAIL_HOST_USER = 'arstanbekovasil10@gmail.com'
-EMAIL_HOST_PASSWORD = 'qpyzeyeymglfptxx'
-SITE_URL = 'http://localhost:8000'
-DEFAULT_FROM_EMAIL = 'arstanbekovasil10@gmail.com'
+# Custom user model
+AUTH_USER_MODEL = 'api.User'
 
+# REST Framework
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
@@ -100,6 +106,13 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 12
 }
 
+# JWT Settings
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(days=1),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+}
+
+# Swagger
 SWAGGER_SETTINGS = {
     'SECURITY_DEFINITIONS': {
         'Bearer': {
@@ -111,7 +124,18 @@ SWAGGER_SETTINGS = {
     'USE_SESSION_AUTH': False,
 }
 
+# Authentication backends
 AUTHENTICATION_BACKENDS = [
     'api.backends.EmailBackend',
     'django.contrib.auth.backends.ModelBackend',
 ]
+
+# Email settings
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = 'arstanbekovasil10@gmail.com'
+EMAIL_HOST_PASSWORD = 'qpyzeyeymglfptxx'
+DEFAULT_FROM_EMAIL = 'arstanbekovasil10@gmail.com'
+SITE_URL = 'https://drivecar-vkdc.onrender.com'
