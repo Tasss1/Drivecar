@@ -2,11 +2,8 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
-from rest_framework_simplejwt.tokens import AccessToken
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
-from api.models import User
-from .serializers import RegisterSerializer
 from django.core.mail import send_mail
 from django.conf import settings
 from django.utils import timezone
@@ -14,13 +11,18 @@ from django.contrib.auth import authenticate
 import random
 from datetime import timedelta
 
+from api.models import User
+from .serializers import RegisterSerializer
+from .tokens import CustomAccessToken
+
 
 class AuthViewSet(viewsets.ViewSet):
     permission_classes = [AllowAny]
 
+    # === Регистрация ===
     @swagger_auto_schema(
         operation_summary="Register",
-        operation_description="Create new user account",
+        operation_description="Создаёт новый аккаунт пользователя и отправляет код подтверждения на email.",
         request_body=RegisterSerializer,
         responses={201: openapi.Response(
             'Success',
@@ -41,9 +43,10 @@ class AuthViewSet(viewsets.ViewSet):
             return Response({'message': 'Регистрация успешна. Проверьте email.'}, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+    # === Логин ===
     @swagger_auto_schema(
         operation_summary="Login",
-        operation_description="Get JWT access token for user or admin",
+        operation_description="Авторизация по email и паролю. Возвращает JWT токен с ролью.",
         request_body=openapi.Schema(
             type=openapi.TYPE_OBJECT,
             properties={
@@ -76,19 +79,16 @@ class AuthViewSet(viewsets.ViewSet):
         if not user.is_active:
             return Response({'message': 'Аккаунт не активирован'}, status=status.HTTP_400_BAD_REQUEST)
 
-        access = str(AccessToken.for_user(user))
-
-        # Роль: если email admin@gmail.com — admin, иначе стандартно
-        if email == "admin@gmail.com":
-            role = "admin"
-        else:
-            role = "admin" if user.is_staff or user.is_superuser else "user"
+        # ✅ Генерация кастомного токена с ролью
+        access = str(CustomAccessToken.for_user(user))
+        role = "admin" if user.is_staff or user.is_superuser else "user"
 
         return Response({'access': access, 'role': role}, status=status.HTTP_200_OK)
 
+# === Подтверждение Email ===
     @swagger_auto_schema(
         operation_summary="Verify Email",
-        operation_description="Verify user email",
+        operation_description="Подтверждает email по коду из письма и активирует аккаунт.",
         request_body=openapi.Schema(
             type=openapi.TYPE_OBJECT,
             properties={
@@ -103,20 +103,25 @@ class AuthViewSet(viewsets.ViewSet):
     def verify_email(self, request):
         email = request.data.get('email')
         code = request.data.get('code')
+
         try:
             user = User.objects.get(email=email, is_active=False)
             if user.activation_key == code and user.activation_key_expires > timezone.now():
                 user.is_active = True
                 user.save()
-                access = str(AccessToken.for_user(user))
-                return Response({'message': 'Email подтверждён', 'access': access})
-            return Response({'message': 'Неверный код или истёк'}, status=status.HTTP_400_BAD_REQUEST)
+
+                access = str(CustomAccessToken.for_user(user))
+                role = "admin" if user.is_staff or user.is_superuser else "user"
+
+                return Response({'message': 'Email подтверждён', 'access': access, 'role': role})
+            return Response({'message': 'Неверный код или срок истёк'}, status=status.HTTP_400_BAD_REQUEST)
         except User.DoesNotExist:
             return Response({'message': 'Пользователь не найден'}, status=status.HTTP_400_BAD_REQUEST)
 
+    # === Забыл пароль ===
     @swagger_auto_schema(
         operation_summary="Forgot Password",
-        operation_description="Send reset code to email",
+        operation_description="Отправляет 4-значный код для сброса пароля на email.",
         request_body=openapi.Schema(
             type=openapi.TYPE_OBJECT,
             properties={
@@ -139,9 +144,10 @@ class AuthViewSet(viewsets.ViewSet):
         except User.DoesNotExist:
             return Response({'message': 'Email не найден'}, status=status.HTTP_400_BAD_REQUEST)
 
+    # === Сброс пароля ===
     @swagger_auto_schema(
         operation_summary="Reset Password",
-        operation_description="Reset password with code",
+        operation_description="Сбрасывает пароль с использованием кода, отправленного на email.",
         request_body=openapi.Schema(
             type=openapi.TYPE_OBJECT,
             properties={
@@ -158,21 +164,22 @@ class AuthViewSet(viewsets.ViewSet):
         email = request.data.get('email')
         code = request.data.get('code')
         new_password = request.data.get('new_password')
+
         try:
             user = User.objects.get(email=email)
             if user.activation_key == code and user.activation_key_expires > timezone.now():
                 user.set_password(new_password)
                 user.save()
                 return Response({'message': 'Пароль изменён'}, status=status.HTTP_200_OK)
-            return Response({'message': 'Неверный код или истёк'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'message': 'Неверный код или срок истёк'}, status=status.HTTP_400_BAD_REQUEST)
         except User.DoesNotExist:
             return Response({'message': 'Email не найден'}, status=status.HTTP_400_BAD_REQUEST)
 
-    # ======= Email helpers =======
+# === Email-помощники ===
     def send_activation_email(self, user):
         send_mail(
             'Активация аккаунта',
-            f'Ваш код: {user.activation_key}. Введите на сайте.',
+            f'Ваш код подтверждения: {user.activation_key}',
             settings.DEFAULT_FROM_EMAIL,
             [user.email]
         )
@@ -180,7 +187,7 @@ class AuthViewSet(viewsets.ViewSet):
     def send_reset_email(self, user):
         send_mail(
             'Сброс пароля',
-            f'Ваш код для сброса: {user.activation_key}. Введите на сайте.',
+            f'Ваш код для сброса: {user.activation_key}',
             settings.DEFAULT_FROM_EMAIL,
             [user.email]
         )
