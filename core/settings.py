@@ -106,6 +106,7 @@ SWAGGER_SETTINGS = {
         }
     },
     'USE_SESSION_AUTH': False,
+    'DEFAULT_API_URL': 'https://drivecar-claz.onrender.com',
 }
 
 AUTHENTICATION_BACKENDS = [
