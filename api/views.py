@@ -1,3 +1,4 @@
+from django.contrib.auth.models import AnonymousUser
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -191,3 +192,9 @@ class AuthViewSet(viewsets.ViewSet):
             settings.DEFAULT_FROM_EMAIL,
             [user.email]
         )
+
+    def get_safe_user(self):
+        user = getattr(self.request, 'user', None)
+        if isinstance(user, AnonymousUser) or user is None:
+            return None
+        return user
