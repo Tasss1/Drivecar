@@ -1,145 +1,146 @@
+from rest_framework import permissions
+from rest_framework.parsers import MultiPartParser, FormParser
+from .models import Ad, CarImage
+from .serializers import AdSerializer, CarSerializer, CarCreateSerializer, CarImageSerializer
 from rest_framework import viewsets, status
+from rest_framework.permissions import IsAdminUser, IsAuthenticatedOrReadOnly, IsAuthenticated
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticatedOrReadOnly, IsAuthenticated
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from django.db.models import Q, Count
 from .models import Car
-from .serializers import CarSerializer
+from favorites.models import Favorite
 
 
-class CarViewSet(viewsets.ModelViewSet):
+class AdminCarViewSet(viewsets.ModelViewSet):
+    """
+    Управление машинами (только для админа)
+    """
     queryset = Car.objects.all()
-    serializer_class = CarSerializer
-    permission_classes = [IsAuthenticatedOrReadOnly]
+    permission_classes = [IsAdminUser]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def get_serializer_class(self):
+        if self.action in ['create', 'update', 'partial_update']:
+            return CarCreateSerializer
+        return CarSerializer
 
     @swagger_auto_schema(
-        operation_summary="Get All Cars",
-        operation_description="Get paginated list of cars with filtering and search",
+        operation_summary="Список машин (админ)",
+        operation_description="Получить список всех машин с фильтрацией по бренду, модели, цене и статусу",
         manual_parameters=[
-            openapi.Parameter('brand', openapi.IN_QUERY, description="Filter by brand", type=openapi.TYPE_STRING),
-            openapi.Parameter('car_type', openapi.IN_QUERY, description="Filter by car type", type=openapi.TYPE_STRING),
-            openapi.Parameter('min_price', openapi.IN_QUERY, description="Minimum price", type=openapi.TYPE_NUMBER),
-            openapi.Parameter('max_price', openapi.IN_QUERY, description="Maximum price", type=openapi.TYPE_NUMBER),
-            openapi.Parameter('search', openapi.IN_QUERY, description="Search by brand or model",
+            openapi.Parameter('search', openapi.IN_QUERY, description="Поиск по бренду или модели",
                               type=openapi.TYPE_STRING),
-            openapi.Parameter('page', openapi.IN_QUERY, description="Page number", type=openapi.TYPE_INTEGER),
+            openapi.Parameter('is_active', openapi.IN_QUERY, description="Фильтр по статусу (активна/не активна)",
+                              type=openapi.TYPE_BOOLEAN),
+            openapi.Parameter('min_price', openapi.IN_QUERY, description="Минимальная цена", type=openapi.TYPE_NUMBER),
+            openapi.Parameter('max_price', openapi.IN_QUERY, description="Максимальная цена", type=openapi.TYPE_NUMBER),
         ],
-        tags=['Cars']
+        tags=['Админ Машины']
     )
     def list(self, request, *args, **kwargs):
-        return super().list(request, *args, **kwargs)
+        queryset = self.get_queryset()
+        search = request.query_params.get('search')
+        if search:
+            queryset = queryset.filter(Q(brand__icontains=search) | Q(model__icontains=search))
+        is_active = request.query_params.get('is_active')
+        if is_active is not None:
+            queryset = queryset.filter(is_active=bool(int(is_active)))
+        min_price = request.query_params.get('min_price')
+        if min_price:
+            queryset = queryset.filter(price__gte=min_price)
+        max_price = request.query_params.get('max_price')
+        if max_price:
+            queryset = queryset.filter(price__lte=max_price)
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
 
     @swagger_auto_schema(
-        operation_summary="Get Car Details",
-        operation_description="Get detailed information about a specific car",
-        tags=['Cars']
+        operation_summary="Создать машину (админ)",
+        operation_description="Создать новую машину с указанием всех полей",
+        request_body=CarCreateSerializer,
+        tags=['Админ Машины']
+    )
+    def create(self, request, *args, **kwargs):
+        images_data = request.FILES.getlist('images')
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        car = serializer.save()
+
+        # сохраняем до 10 дополнительных фото
+        for img in images_data[:10]:
+            CarImage.objects.create(car=car, image=img)
+
+        full_serializer = CarSerializer(car, context=self.get_serializer_context())
+        return Response(full_serializer.data, status=status.HTTP_201_CREATED)
+
+    @swagger_auto_schema(
+        operation_summary="Получить машину (админ)",
+        operation_description="Получить информацию о машине по ID",
+        tags=['Админ Машины']
     )
     def retrieve(self, request, *args, **kwargs):
         return super().retrieve(request, *args, **kwargs)
 
     @swagger_auto_schema(
-        operation_summary="Create Car",
-        operation_description="Create a new car (Admin only)",
-        request_body=CarSerializer,
-        tags=['Cars']
+        operation_summary="Редактировать машину (админ)",
+        operation_description="Обновить все поля машины по ID",
+        request_body=CarCreateSerializer,
+        tags=['Админ Машины']
     )
-    def create(self, request, *args, **kwargs):
-        return super().create(request, *args, **kwargs)
-
-    @swagger_auto_schema(
-        operation_summary="Add to Favorites",
-        operation_description="Add a car to user's favorites",
-        responses={
-            201: openapi.Response('Success', examples={
-                'application/json': {'status': 'added to favorites'}
-            }),
-            200: openapi.Response('Info', examples={
-                'application/json': {'status': 'already in favorites'}
-            })
-        },
-        tags=['Cars']
-    )
-    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
-    def add_to_favorites(self, request, pk=None):
+    def update(self, request, *args, **kwargs):
         car = self.get_object()
-        from favorites.models import Favorite
-        favorite, created = Favorite.objects.get_or_create(
-            user=request.user, car=car
-        )
-        if created:
-            return Response({
-                'message': 'Автомобиль добавлен в избранное',
-                'status': 'added to favorites'
-            }, status=status.HTTP_201_CREATED)
-        return Response({
-            'message': 'Автомобиль уже в избранном',
-            'status': 'already in favorites'
-        }, status=status.HTTP_200_OK)
+        images_data = request.FILES.getlist('images')
+        serializer = self.get_serializer(car, data=request.data, partial=False)
+        serializer.is_valid(raise_exception=True)
+        car = serializer.save()
+
+        if images_data:
+            car.images.all().delete()
+            for img in images_data[:10]:
+                CarImage.objects.create(car=car, image=img)
+
+        full_serializer = CarSerializer(car, context=self.get_serializer_context())
+        return Response(full_serializer.data)
 
     @swagger_auto_schema(
-        operation_summary="Remove from Favorites",
-        operation_description="Remove a car from user's favorites",
-        responses={
-            200: openapi.Response('Success', examples={
-                'application/json': {'status': 'removed from favorites'}
-            })
-        },
-        tags=['Cars']
+        operation_summary="Частичное редактирование машины (админ)",
+        operation_description="Обновить отдельные поля машины по ID",
+        request_body=CarCreateSerializer,
+        tags=['Админ Машины']
     )
-    @action(detail=True, methods=['delete'], permission_classes=[IsAuthenticated])
-    def remove_from_favorites(self, request, pk=None):
+    def partial_update(self, request, *args, **kwargs):
         car = self.get_object()
-        from favorites.models import Favorite
-        Favorite.objects.filter(user=request.user, car=car).delete()
-        return Response({
-            'message': 'Автомобиль удален из избранного',
-            'status': 'removed from favorites'
-        }, status=status.HTTP_200_OK)
+        images_data = request.FILES.getlist('images')
+        serializer = self.get_serializer(car, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        car = serializer.save()
+
+        if images_data:
+            car.images.all().delete()
+            for img in images_data[:10]:
+                CarImage.objects.create(car=car, image=img)
+
+        full_serializer = CarSerializer(car, context=self.get_serializer_context())
+        return Response(full_serializer.data)
 
     @swagger_auto_schema(
-        operation_summary="Featured Cars",
-        operation_description="Get featured cars for homepage (new and popular)",
-        tags=['Cars']
+        operation_summary="Удалить машину (админ)",
+        operation_description="Удалить машину по ID",
+        tags=['Админ Машины']
     )
-    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticatedOrReadOnly])
-    def featured(self, request):
-        new_cars = Car.objects.all().order_by('-created_at')[:6]
-        popular_cars = Car.objects.annotate(
-            favorites_count=Count('favorite')
-        ).order_by('-favorites_count')[:6]
+    def destroy(self, request, *args, **kwargs):
+        return super().destroy(request, *args, **kwargs)
 
-        new_serializer = CarSerializer(new_cars, many=True, context={'request': request})
-        popular_serializer = CarSerializer(popular_cars, many=True, context={'request': request})
 
-        return Response({
-            'new_cars': new_serializer.data,
-            'popular_cars': popular_serializer.data
-        })
-
-    @swagger_auto_schema(
-        operation_summary="Get Brands",
-        operation_description="Get all available car brands",
-        tags=['Cars']
-    )
-    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticatedOrReadOnly])
-    def brands(self, request):
-        brands = Car.objects.values_list('brand', flat=True).distinct()
-        return Response({'brands': list(brands)})
-
-    @swagger_auto_schema(
-        operation_summary="Get Car Types",
-        operation_description="Get all available car types",
-        tags=['Cars']
-    )
-    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticatedOrReadOnly])
-    def car_types(self, request):
-        car_types = [choice[0] for choice in Car.CAR_TYPES]
-        return Response({'car_types': car_types})
+class CarViewSet(viewsets.ReadOnlyModelViewSet):  # Только чтение!
+    queryset = Car.objects.filter(is_active=True)
+    serializer_class = CarSerializer
+    permission_classes = [IsAuthenticatedOrReadOnly]
 
     def get_queryset(self):
-        queryset = Car.objects.all()
+        queryset = Car.objects.filter(is_active=True)
 
         brand = self.request.query_params.get('brand')
         if brand:
@@ -164,86 +165,104 @@ class CarViewSet(viewsets.ModelViewSet):
 
         return queryset
 
-
-from rest_framework import viewsets, status
-from rest_framework.permissions import IsAdminUser
-from rest_framework.decorators import action
-from rest_framework.response import Response
-from drf_yasg.utils import swagger_auto_schema
-from drf_yasg import openapi
-from django.db.models import Q
-from .models import Car
-from .serializers import CarSerializer
-
-# Существующий CarViewSet остается без изменений
-
-class AdminCarViewSet(viewsets.ModelViewSet):
-    queryset = Car.objects.all()
-    serializer_class = CarSerializer
-    permission_classes = [IsAdminUser]
-
     @swagger_auto_schema(
-        operation_summary="Admin List Cars",
-        operation_description="List cars with admin filters/search",
+        operation_summary="Список всех машин",
+        operation_description="Возвращает список всех активных машин с фильтрацией",
         manual_parameters=[
-            openapi.Parameter('search', openapi.IN_QUERY, description="Search by brand/model", type=openapi.TYPE_STRING),
-            openapi.Parameter('is_active', openapi.IN_QUERY, description="Filter by status", type=openapi.TYPE_BOOLEAN),
-            openapi.Parameter('min_price', openapi.IN_QUERY, description="Min price", type=openapi.TYPE_NUMBER),
-            openapi.Parameter('max_price', openapi.IN_QUERY, description="Max price", type=openapi.TYPE_NUMBER),
+            openapi.Parameter('brand', openapi.IN_QUERY, description="Фильтр по марке", type=openapi.TYPE_STRING),
+            openapi.Parameter('car_type', openapi.IN_QUERY, description="Фильтр по типу кузова",
+                              type=openapi.TYPE_STRING),
+            openapi.Parameter('min_price', openapi.IN_QUERY, description="Минимальная цена", type=openapi.TYPE_NUMBER),
+            openapi.Parameter('max_price', openapi.IN_QUERY, description="Максимальная цена", type=openapi.TYPE_NUMBER),
+            openapi.Parameter('search', openapi.IN_QUERY, description="Поиск по марке/модели",
+                              type=openapi.TYPE_STRING),
         ],
-        tags=['Admin Cars']
+        tags=['Cars']
     )
     def list(self, request, *args, **kwargs):
-        queryset = self.get_queryset()
-        search = request.query_params.get('search')
-        if search:
-            queryset = queryset.filter(Q(brand__icontains=search) | Q(model__icontains=search))
-        is_active = request.query_params.get('is_active')
-        if is_active is not None:
-            queryset = queryset.filter(is_active=bool(is_active))
-        min_price = request.query_params.get('min_price')
-        if min_price:
-            queryset = queryset.filter(price__gte=min_price)
-        max_price = request.query_params.get('max_price')
-        if max_price:
-            queryset = queryset.filter(price__lte=max_price)
-        serializer = self.get_serializer(queryset, many=True)
+        return super().list(request, *args, **kwargs)
+
+    @swagger_auto_schema(
+        operation_summary="Получение информации о машине",
+        operation_description="Возвращает данные конкретной машины по ID",
+        responses={200: CarSerializer()},
+        tags=['Cars']
+    )
+    def retrieve(self, request, *args, **kwargs):
+        return super().retrieve(request, *args, **kwargs)
+
+    @swagger_auto_schema(
+        operation_summary="Рекомендуемые машины",
+        operation_description="Получить рекомендуемые машины для главной страницы (новые и популярные)",
+        tags=['Cars']
+    )
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticatedOrReadOnly])
+    def featured(self, request):
+        new_cars = Car.objects.filter(is_active=True).order_by('-created_at')[:6]
+        popular_cars = Car.objects.filter(is_active=True).annotate(
+            favorites_count=Count('favorite')
+        ).order_by('-favorites_count')[:6]
+
+        new_serializer = CarSerializer(new_cars, many=True, context={'request': request})
+        popular_serializer = CarSerializer(popular_cars, many=True, context={'request': request})
+
+        return Response({
+            'new_cars': new_serializer.data,
+            'popular_cars': popular_serializer.data
+        })
+
+    @swagger_auto_schema(
+        operation_summary="Получить бренды",
+        operation_description="Получить все доступные бренды машин",
+        tags=['Cars']
+    )
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticatedOrReadOnly])
+    def brands(self, request):
+        brands = Car.objects.filter(is_active=True).values_list('brand', flat=True).distinct()
+        return Response({'brands': list(brands)})
+
+    @swagger_auto_schema(
+        operation_summary="Получить типы кузова",
+        operation_description="Получить все доступные типы кузова",
+        tags=['Cars']
+    )
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticatedOrReadOnly])
+    def car_types(self, request):
+        car_types = [choice[0] for choice in Car.CAR_TYPES]
+        return Response({'car_types': car_types})
+
+    @swagger_auto_schema(
+        operation_summary="Получить изображения машины",
+        operation_description="Получить все дополнительные изображения машины",
+        tags=['Cars']
+    )
+    @action(detail=True, methods=['get'])
+    def images(self, request, pk=None):
+        car = self.get_object()
+        images = car.images.all()
+        serializer = CarImageSerializer(images, many=True)
         return Response(serializer.data)
 
-    @swagger_auto_schema(
-        operation_summary="Admin Create Car",
-        operation_description="Create car (admin only)",
-        request_body=CarSerializer,
-        tags=['Admin Cars']
-    )
-    def create(self, request, *args, **kwargs):
-        return super().create(request, *args, **kwargs)
+
+class AdViewSet(viewsets.ModelViewSet):
+    queryset = Ad.objects.all()
+    serializer_class = AdSerializer
+    permission_classes = [IsAdminUser]  # Только админ!
+    parser_classes = [MultiPartParser, FormParser]
 
     @swagger_auto_schema(
-        operation_summary="Admin Update Car",
-        operation_description="Update car (admin only)",
-        request_body=CarSerializer,
-        tags=['Admin Cars']
+        operation_summary="Список рекламных объявлений",
+        operation_description="Получить все рекламные объявления",
+        tags=['Ads']
     )
-    def update(self, request, *args, **kwargs):
-        return super().update(request, *args, **kwargs)
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
 
     @swagger_auto_schema(
-        operation_summary="Admin Delete Car",
-        operation_description="Delete car (admin only)",
-        tags=['Admin Cars']
+        operation_summary="Получить рекламное объявление",
+        operation_description="Получить информацию о рекламном объявлении по ID",
+        tags=['Ads']
     )
-    def destroy(self, request, *args, **kwargs):
-        return super().destroy(request, *args, **kwargs)
+    def retrieve(self, request, *args, **kwargs):
+        return super().retrieve(request, *args, **kwargs)
 
-    @swagger_auto_schema(
-        operation_summary="Admin Toggle Status",
-        operation_description="Toggle car status (admin only)",
-        tags=['Admin Cars']
-    )
-    @action(detail=True, methods=['patch'], permission_classes=[IsAdminUser])
-    def toggle_status(self, request, pk=None):
-        car = self.get_object()
-        car.is_active = not car.is_active
-        car.save()
-        return Response({'message': 'Статус изменён', 'is_active': car.is_active})

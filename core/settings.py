@@ -7,7 +7,6 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-rboj#b9769wj#+-kmeq(i7+6vn*3a0cf8e6993dvvnna@8g#ow'
 DEBUG = True
 ALLOWED_HOSTS = ['*']
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -31,7 +30,6 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',
 ]
 
 ROOT_URLCONF = 'core.urls'
@@ -54,7 +52,6 @@ TEMPLATES = [
     },
 ]
 
-# SQLite Database
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
@@ -79,19 +76,15 @@ TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
 
-STATIC_URL = '/static/'
+STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
-
-# Email Settings
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = 'arstanbekovasil10@gmail.com'
 EMAIL_HOST_PASSWORD = 'qpyzeyeymglfptxx'
-SITE_URL = 'https://your-app.onrender.com'
 DEFAULT_FROM_EMAIL = 'arstanbekovasil10@gmail.com'
 
 REST_FRAMEWORK = {
@@ -109,7 +102,6 @@ SWAGGER_SETTINGS = {
         }
     },
     'USE_SESSION_AUTH': False,
-    'DEFAULT_API_URL': 'https://drivecar-claz.onrender.com',
 }
 
 AUTHENTICATION_BACKENDS = [
