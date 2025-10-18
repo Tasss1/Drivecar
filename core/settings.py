@@ -1,15 +1,15 @@
 import os
 from pathlib import Path
-from datetime import timedelta
 from dotenv import load_dotenv
 
 load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = os.environ['SECRET_KEY']
+# ВАЖНО: используйте os.getenv() вместо os.environ[]
+SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-fallback-key-for-render')
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',')
+ALLOWED_HOSTS = ['*']  # Для начала
 
 DATABASES = {
     'default': {
@@ -104,6 +104,17 @@ REST_FRAMEWORK = {
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
 }
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'DriveCar API',
+    'DESCRIPTION': 'Car driving service API',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'SWAGGER_UI_SETTINGS': {
+        'persistAuthorization': True,
+    },
+}
+
 
 SWAGGER_SETTINGS = {
     'SECURITY_DEFINITIONS': {
