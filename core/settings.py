@@ -113,16 +113,6 @@ REST_FRAMEWORK = {
     ),
 }
 
-# Swagger / DRF-YASG
-SPECTACULAR_SETTINGS = {
-    'TITLE': 'DriveCar API',
-    'DESCRIPTION': 'Car driving service API',
-    'VERSION': '1.0.0',
-    'SERVE_INCLUDE_SCHEMA': False,
-    'SWAGGER_UI_SETTINGS': {
-        'persistAuthorization': True,
-    },
-}
 
 SWAGGER_SETTINGS = {
     'SECURITY_DEFINITIONS': {

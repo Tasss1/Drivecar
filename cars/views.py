@@ -39,7 +39,6 @@ class AdminCarViewSet(viewsets.ModelViewSet):
         if search := request.query_params.get('search'):
             qs = qs.filter(Q(brand__icontains=search) | Q(model__icontains=search))
 
-        # Исправлено: теперь принимает true/false/1/0
         if (is_active := request.query_params.get('is_active')) is not None:
             is_active_bool = str(is_active).lower() in ('true', '1', 'yes', 'on')
             qs = qs.filter(is_active=is_active_bool)
@@ -52,6 +51,15 @@ class AdminCarViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(qs, many=True)
         return Response(serializer.data)
 
+    @swagger_auto_schema(
+        operation_summary="Создать машину",
+        request_body=CarCreateSerializer,
+        consumes=['multipart/form-data'],
+        manual_parameters=[
+            openapi.Parameter('images', openapi.IN_FORM, type=openapi.TYPE_FILE, multiple=True),
+        ],
+        tags=['Админ Машины']
+    )
     def create(self, request, *args, **kwargs):
         images_data = request.FILES.getlist('images')
         serializer = self.get_serializer(data=request.data)
@@ -63,9 +71,27 @@ class AdminCarViewSet(viewsets.ModelViewSet):
 
         return Response(CarSerializer(car, context=self.get_serializer_context()).data, status=201)
 
+    @swagger_auto_schema(
+        operation_summary="Обновить машину",
+        request_body=CarCreateSerializer,
+        consumes=['multipart/form-data'],
+        manual_parameters=[
+            openapi.Parameter('images', openapi.IN_FORM, type=openapi.TYPE_FILE, multiple=True),
+        ],
+        tags=['Админ Машины']
+    )
     def update(self, request, *args, **kwargs):
         return self._update_car(request, partial=False)
 
+    @swagger_auto_schema(
+        operation_summary="Частичное обновление машины",
+        request_body=CarCreateSerializer,
+        consumes=['multipart/form-data'],
+        manual_parameters=[
+            openapi.Parameter('images', openapi.IN_FORM, type=openapi.TYPE_FILE, multiple=True),
+        ],
+        tags=['Админ Машины']
+    )
     def partial_update(self, request, *args, **kwargs):
         return self._update_car(request, partial=True)
 
@@ -85,7 +111,6 @@ class AdminCarViewSet(viewsets.ModelViewSet):
         return Response(CarSerializer(car, context=self.get_serializer_context()).data)
 
 
-# Остальные viewsets (CarViewSet, AdViewSet) — без изменений
 class CarViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Car.objects.filter(is_active=True)
     serializer_class = CarSerializer
@@ -93,17 +118,52 @@ class CarViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         qs = Car.objects.filter(is_active=True)
-        # ... (фильтры без изменений)
+        if search := self.request.query_params.get('search'):
+            qs = qs.filter(Q(brand__icontains=search) | Q(model__icontains=search))
+        if min_price := self.request.query_params.get('min_price'):
+            qs = qs.filter(price__gte=min_price)
+        if max_price := self.request.query_params.get('max_price'):
+            qs = qs.filter(price__lte=max_price)
         return qs
 
+    @swagger_auto_schema(
+        operation_summary="Популярные машины",
+        tags=['Пользователь Машины']
+    )
     @action(detail=False, methods=['get'])
-    def featured(self, request): ...
+    def featured(self, request):
+        qs = self.get_queryset().order_by('-views')[:10]
+        serializer = self.get_serializer(qs, many=True)
+        return Response(serializer.data)
+
+    @swagger_auto_schema(
+        operation_summary="Список марок",
+        tags=['Пользователь Машины']
+    )
     @action(detail=False, methods=['get'])
-    def brands(self, request): ...
+    def brands(self, request):
+        brands = self.get_queryset().values_list('brand', flat=True).distinct()
+        return Response(list(brands))
+
+    @swagger_auto_schema(
+        operation_summary="Список типов",
+        tags=['Пользователь Машины']
+    )
     @action(detail=False, methods=['get'])
-    def car_types(self, request): ...
+    def car_types(self, request):
+        types = self.get_queryset().values_list('car_type', flat=True).distinct()
+        return Response(list(types))
+
+    @swagger_auto_schema(
+        operation_summary="Фото машины",
+        tags=['Пользователь Машины']
+    )
     @action(detail=True, methods=['get'])
-    def images(self, request, pk=None): ...
+    def images(self, request, pk=None):
+        car = self.get_object()
+        images = car.images.all()
+        serializer = CarImageSerializer(images, many=True)
+        return Response(serializer.data)
 
 
 class AdViewSet(viewsets.ModelViewSet):
