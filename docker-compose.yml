@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15
+    container_name: drivecar_db
+    environment:
+      POSTGRES_DB: drivecar_db
+      POSTGRES_USER: raha
+      POSTGRES_PASSWORD: password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+#    ports:
+#      - "5432:5432"
+
+  web:
+    build: .
+    container_name: drivecar_web
+    command: >
+      sh -c "python manage.py migrate &&
+             python manage.py collectstatic --noinput &&
+             gunicorn core.wsgi:application --bind 0.0.0.0:8000"
+    volumes:
+      - .:/app
+      - static_volume:/app/staticfiles
+    ports:
+      - "8000:8000"
+    environment:
+      - DB_HOST=db
+      - DB_NAME=drivecar_db
+      - DB_USER=raha
+      - DB_PASSWORD=password
+    depends_on:
+      - db
+
+volumes:
+  postgres_data:
+  static_volume:
+

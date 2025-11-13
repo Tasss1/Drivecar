@@ -13,6 +13,18 @@ from .serializers import CarSerializer, CarCreateSerializer, CarImageSerializer,
 from favorites.models import Favorite
 
 
+from django.db.models import Q
+from rest_framework import viewsets
+from rest_framework.permissions import IsAdminUser
+from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.response import Response
+from drf_yasg.utils import swagger_auto_schema
+from drf_yasg import openapi
+
+from .models import Car, CarImage
+from .serializers import CarSerializer, CarCreateSerializer
+
+
 class AdminCarViewSet(viewsets.ModelViewSet):
     queryset = Car.objects.all()
     permission_classes = [IsAdminUser]
@@ -26,28 +38,24 @@ class AdminCarViewSet(viewsets.ModelViewSet):
     @swagger_auto_schema(
         operation_summary="Список машин (админ)",
         manual_parameters=[
-            openapi.Parameter('search', openapi.IN_QUERY, type=openapi.TYPE_STRING),
-            openapi.Parameter('is_active', openapi.IN_QUERY, type=openapi.TYPE_BOOLEAN),
-            openapi.Parameter('min_price', openapi.IN_QUERY, type=openapi.TYPE_NUMBER),
-            openapi.Parameter('max_price', openapi.IN_QUERY, type=openapi.TYPE_NUMBER),
+            openapi.Parameter('search', openapi.IN_QUERY, type=openapi.TYPE_STRING, description="Поиск по бренду или модели"),
+            openapi.Parameter('is_active', openapi.IN_QUERY, type=openapi.TYPE_BOOLEAN, description="Фильтр по активности"),
+            openapi.Parameter('min_price', openapi.IN_QUERY, type=openapi.TYPE_NUMBER, description="Минимальная цена"),
+            openapi.Parameter('max_price', openapi.IN_QUERY, type=openapi.TYPE_NUMBER, description="Максимальная цена"),
         ],
         tags=['Админ Машины']
     )
     def list(self, request, *args, **kwargs):
         qs = self.get_queryset()
-
         if search := request.query_params.get('search'):
             qs = qs.filter(Q(brand__icontains=search) | Q(model__icontains=search))
-
         if (is_active := request.query_params.get('is_active')) is not None:
-            is_active_bool = str(is_active).lower() in ('true', '1', 'yes', 'on')
+            is_active_bool = str(is_active).lower() in ('true', '1', 'yes', 'y')
             qs = qs.filter(is_active=is_active_bool)
-
         if min_price := request.query_params.get('min_price'):
             qs = qs.filter(price__gte=min_price)
         if max_price := request.query_params.get('max_price'):
             qs = qs.filter(price__lte=max_price)
-
         serializer = self.get_serializer(qs, many=True)
         return Response(serializer.data)
 
@@ -56,7 +64,13 @@ class AdminCarViewSet(viewsets.ModelViewSet):
         request_body=CarCreateSerializer,
         consumes=['multipart/form-data'],
         manual_parameters=[
-            openapi.Parameter('images', openapi.IN_FORM, type=openapi.TYPE_FILE, multiple=True),
+            openapi.Parameter(
+                'images',
+                openapi.IN_FORM,
+                type=openapi.TYPE_FILE,
+                description="Дополнительные фото",
+                required=False,
+            )
         ],
         tags=['Админ Машины']
     )
@@ -65,18 +79,22 @@ class AdminCarViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         car = serializer.save()
-
         for img in images_data[:10]:
             CarImage.objects.create(car=car, image=img)
-
-        return Response(CarSerializer(car, context=self.get_serializer_context()).data, status=201)
+        return Response(CarSerializer(car, context=self.get_serializer_context()).data)
 
     @swagger_auto_schema(
         operation_summary="Обновить машину",
         request_body=CarCreateSerializer,
         consumes=['multipart/form-data'],
         manual_parameters=[
-            openapi.Parameter('images', openapi.IN_FORM, type=openapi.TYPE_FILE, multiple=True),
+            openapi.Parameter(
+                'images',
+                openapi.IN_FORM,
+                type=openapi.TYPE_FILE,
+                description="Дополнительные фото",
+                required=False,
+            )
         ],
         tags=['Админ Машины']
     )
@@ -88,7 +106,13 @@ class AdminCarViewSet(viewsets.ModelViewSet):
         request_body=CarCreateSerializer,
         consumes=['multipart/form-data'],
         manual_parameters=[
-            openapi.Parameter('images', openapi.IN_FORM, type=openapi.TYPE_FILE, multiple=True),
+            openapi.Parameter(
+                'images',
+                openapi.IN_FORM,
+                type=openapi.TYPE_FILE,
+                description="Дополнительные фото",
+                required=False,
+            )
         ],
         tags=['Админ Машины']
     )
@@ -98,16 +122,13 @@ class AdminCarViewSet(viewsets.ModelViewSet):
     def _update_car(self, request, partial):
         car = self.get_object()
         images_data = request.FILES.getlist('images')
-
         serializer = self.get_serializer(car, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
         car = serializer.save()
-
         if images_data:
             car.images.all().delete()
             for img in images_data[:10]:
                 CarImage.objects.create(car=car, image=img)
-
         return Response(CarSerializer(car, context=self.get_serializer_context()).data)
 
 
