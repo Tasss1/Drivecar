@@ -1,3 +1,4 @@
+from django.contrib.auth import authenticate
 from django.contrib.auth.models import AnonymousUser
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
@@ -5,17 +6,14 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
-from django.core.mail import send_mail
-from django.conf import settings
 from django.utils import timezone
-from django.contrib.auth import authenticate
 import random
 from datetime import timedelta
 
 from api.models import User
 from .serializers import RegisterSerializer
 from .tokens import CustomAccessToken
-
+from gmail_setup import send_email  # твоя функция Gmail API
 
 class AuthViewSet(viewsets.ViewSet):
     permission_classes = [AllowAny]
@@ -44,7 +42,6 @@ class AuthViewSet(viewsets.ViewSet):
             return Response({'message': 'Регистрация успешна. Проверьте email.'}, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    # === Логин ===
     @swagger_auto_schema(
         operation_summary="Login",
         operation_description="Авторизация по email и паролю. Возвращает JWT токен с ролью.",
@@ -80,13 +77,11 @@ class AuthViewSet(viewsets.ViewSet):
         if not user.is_active:
             return Response({'message': 'Аккаунт не активирован'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # ✅ Генерация кастомного токена с ролью
         access = str(CustomAccessToken.for_user(user))
         role = "admin" if user.is_staff or user.is_superuser else "user"
-
         return Response({'access': access, 'role': role}, status=status.HTTP_200_OK)
 
-# === Подтверждение Email ===
+    # === Подтверждение Email ===
     @swagger_auto_schema(
         operation_summary="Verify Email",
         operation_description="Подтверждает email по коду из письма и активирует аккаунт.",
@@ -110,16 +105,13 @@ class AuthViewSet(viewsets.ViewSet):
             if user.activation_key == code and user.activation_key_expires > timezone.now():
                 user.is_active = True
                 user.save()
-
                 access = str(CustomAccessToken.for_user(user))
                 role = "admin" if user.is_staff or user.is_superuser else "user"
-
                 return Response({'message': 'Email подтверждён', 'access': access, 'role': role})
             return Response({'message': 'Неверный код или срок истёк'}, status=status.HTTP_400_BAD_REQUEST)
         except User.DoesNotExist:
             return Response({'message': 'Пользователь не найден'}, status=status.HTTP_400_BAD_REQUEST)
 
-    # === Забыл пароль ===
     @swagger_auto_schema(
         operation_summary="Forgot Password",
         operation_description="Отправляет 4-значный код для сброса пароля на email.",
@@ -176,21 +168,19 @@ class AuthViewSet(viewsets.ViewSet):
         except User.DoesNotExist:
             return Response({'message': 'Email не найден'}, status=status.HTTP_400_BAD_REQUEST)
 
-# === Email-помощники ===
+    # === Email-помощники с Gmail API ===
     def send_activation_email(self, user):
-        send_mail(
-            'Активация аккаунта',
-            f'Ваш код подтверждения: {user.activation_key}',
-            settings.DEFAULT_FROM_EMAIL,
-            [user.email]
+        send_email(
+            to=user.email,
+            subject='Активация аккаунта',
+            body=f'Ваш код подтверждения: {user.activation_key}'
         )
 
     def send_reset_email(self, user):
-        send_mail(
-            'Сброс пароля',
-            f'Ваш код для сброса: {user.activation_key}',
-            settings.DEFAULT_FROM_EMAIL,
-            [user.email]
+        send_email(
+            to=user.email,
+            subject='Сброс пароля',
+            body=f'Ваш код для сброса: {user.activation_key}'
         )
 
     def get_safe_user(self):

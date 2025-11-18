@@ -1,39 +1,42 @@
-version: '3.8'
-
 services:
   db:
     image: postgres:15
     container_name: drivecar_db
+    restart: always
     environment:
       POSTGRES_DB: drivecar_db
       POSTGRES_USER: raha
       POSTGRES_PASSWORD: password
+    ports:
+      - "5434:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-#    ports:
-#      - "5432:5432"
 
   web:
     build: .
     container_name: drivecar_web
-    command: >
-      sh -c "python manage.py migrate &&
-             python manage.py collectstatic --noinput &&
-             gunicorn core.wsgi:application --bind 0.0.0.0:8000"
-    volumes:
-      - .:/app
-      - static_volume:/app/staticfiles
+    restart: always
+    command: gunicorn core.wsgi:application --bind 0.0.0.0:8000 --workers 2 --worker-class sync --timeout 120
     ports:
       - "8000:8000"
-    environment:
-      - DB_HOST=db
-      - DB_NAME=drivecar_db
-      - DB_USER=raha
-      - DB_PASSWORD=password
+    volumes:
+      - .:/app
     depends_on:
       - db
+    environment:
+      SECRET_KEY: mysecretkey123
+      DEBUG: "True"
+      ALLOWED_HOSTS: "*"
+      DB_ENGINE: django.db.backends.postgresql
+      DB_NAME: drivecar_db
+      DB_USER: raha
+      DB_PASSWORD: password
+      DB_HOST: db
+      DB_PORT: 5432
+      EMAIL_HOST_USER: "arstanbekovasil10@gmail.com"
+      EMAIL_HOST_PASSWORD: "qpyzeyeymglfptxx"
+      JWT_ACCESS_LIFETIME_DAYS: 1
+      JWT_REFRESH_LIFETIME_DAYS: 7
 
 volumes:
   postgres_data:
-  static_volume:
-

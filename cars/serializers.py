@@ -1,4 +1,3 @@
-# cars/serializers.py
 from rest_framework import serializers
 from .models import Car, CarImage, Ad
 from favorites.models import Favorite
@@ -21,7 +20,8 @@ class CarSerializer(serializers.ModelSerializer):
             'id', 'brand', 'model', 'year', 'price', 'car_type', 'fuel_type',
             'engine_volume', 'power', 'transmission', 'mileage', 'condition',
             'steering', 'color', 'installment', 'phone', 'image', 'description',
-            'images', 'created_at', 'is_active', 'views', 'is_favorite', 'installment_months'
+            'images', 'created_at', 'is_active', 'views', 'is_favorite',
+            'installment_months'
         ]
         read_only_fields = ['images', 'views', 'created_at']
 
@@ -36,13 +36,8 @@ class CarSerializer(serializers.ModelSerializer):
 
 
 class CarCreateSerializer(serializers.ModelSerializer):
-    # Доп. фото — список файлов
-    images = serializers.ListField(
-        child=serializers.ImageField(),
-        write_only=True,
-        required=False,
-        max_length=10
-    )
+    # Основное фото
+    image = serializers.ImageField(required=True)
 
     class Meta:
         model = Car
@@ -50,7 +45,6 @@ class CarCreateSerializer(serializers.ModelSerializer):
             'brand', 'model', 'year', 'price', 'car_type', 'fuel_type',
             'engine_volume', 'power', 'transmission', 'mileage', 'condition',
             'steering', 'color', 'installment', 'phone', 'image', 'description',
-            'images'
         ]
 
     def validate_phone(self, value):
@@ -62,13 +56,11 @@ class CarCreateSerializer(serializers.ModelSerializer):
         from datetime import date
         current_year = date.today().year
         if value < 1900 or value > current_year + 1:
-            raise serializers.ValidationError(f"Год должен быть от 1900 до {current_year+1}.")
+            raise serializers.ValidationError(f"Год должен быть от 1900 до {current_year+1}")
         return value
-
 
 
 class AdSerializer(serializers.ModelSerializer):
     class Meta:
         model = Ad
         fields = '__all__'
-
