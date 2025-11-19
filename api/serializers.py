@@ -2,7 +2,8 @@ from rest_framework import serializers
 from api.models import User
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.models import AnonymousUser
-
+from rest_framework import serializers
+from .models import User
 class UserSerializer(serializers.ModelSerializer):
     """Сериализатор для отображения данных пользователя."""
     class Meta:
@@ -10,6 +11,13 @@ class UserSerializer(serializers.ModelSerializer):
         fields = ['id', 'email', 'first_name', 'last_name']
         read_only_fields = ['id', 'email', 'first_name', 'last_name']
 
+
+
+class UserProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['id', 'email', 'first_name', 'last_name', 'role']
+        read_only_fields = ['id', 'email', 'role']
 
 class RegisterSerializer(serializers.ModelSerializer):
     """Сериализатор для регистрации нового пользователя."""

@@ -1,19 +1,37 @@
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import AnonymousUser
-from rest_framework import viewsets, status
-from rest_framework.decorators import action
-from rest_framework.response import Response
+from rest_framework import viewsets, status, permissions
 from rest_framework.permissions import AllowAny
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from django.utils import timezone
 import random
 from datetime import timedelta
-
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from .serializers import UserProfileSerializer
 from api.models import User
 from .serializers import RegisterSerializer
 from .tokens import CustomAccessToken
 from gmail_setup import send_email  # твоя функция Gmail API
+
+class ProfileViewSet(viewsets.ViewSet):
+    permission_classes = [permissions.IsAuthenticated]
+
+    @action(detail=False, methods=['get'], url_path='me')
+    def retrieve_profile(self, request):
+        """Просмотр своего профиля"""
+        serializer = UserProfileSerializer(request.user)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['patch', 'put'], url_path='me')
+    def update_profile(self, request):
+        """Редактирование своего профиля"""
+        serializer = UserProfileSerializer(request.user, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=400)
 
 class AuthViewSet(viewsets.ViewSet):
     permission_classes = [AllowAny]
