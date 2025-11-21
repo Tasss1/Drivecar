@@ -14,20 +14,23 @@ from api.models import User
 from .serializers import RegisterSerializer
 from .tokens import CustomAccessToken
 from gmail_setup import send_email  # твоя функция Gmail API
+from .serializers import UserSerializer
+from rest_framework.decorators import action
+from rest_framework.response import Response
 
 class ProfileViewSet(viewsets.ViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     @action(detail=False, methods=['get'], url_path='me')
-    def retrieve_profile(self, request):
-        """Просмотр своего профиля"""
-        serializer = UserProfileSerializer(request.user)
+    def get_profile(self, request):
+        """Получить свой профиль"""
+        serializer = UserSerializer(request.user)
         return Response(serializer.data)
 
-    @action(detail=False, methods=['patch', 'put'], url_path='me')
+    @action(detail=False, methods=['patch'], url_path='me')
     def update_profile(self, request):
-        """Редактирование своего профиля"""
-        serializer = UserProfileSerializer(request.user, data=request.data, partial=True)
+        """Обновить свой профиль (first_name, last_name)"""
+        serializer = UserSerializer(request.user, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)
