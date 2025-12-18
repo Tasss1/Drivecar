@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     'api',
     'cars',
     'favorites',
+    'banner',
     'drf_yasg',
 ]
 
