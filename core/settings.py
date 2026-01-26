@@ -34,12 +34,12 @@ INSTALLED_APPS = [
     'rest_framework',
 
     'corsheaders',   # ← ДОБАВЛЕНО
-
+    'drf_yasg',
     'api',
     'cars',
     'favorites',
     'banner',
-    'drf_yasg',
+    'review',
 ]
 
 MIDDLEWARE = [

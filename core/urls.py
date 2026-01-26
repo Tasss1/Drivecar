@@ -9,7 +9,7 @@ from django.conf.urls.static import static
 # Swagger / OpenAPI
 schema_view = get_schema_view(
     openapi.Info(
-        title="AUTO API",
+        title="SIUUUUUUUUUUUUU",
         default_version='v1',
         description="API для автомобильной платформы AUTO",
     ),
@@ -25,6 +25,7 @@ urlpatterns = [
     path('api/v1/cars/', include('cars.urls')),
     path('api/v1/favorites/', include('favorites.urls')),
     path('api/v1/banner/', include('banner.urls')),
+    path('api/v1/review/', include('review.urls')),
     # Swagger UI
     path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
     path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
